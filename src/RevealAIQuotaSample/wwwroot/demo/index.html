@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reveal AI Quota Demo</title>
+  <link rel="stylesheet" href="app.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <h1>Reveal AI Quota Demo</h1>
+        <p class="subtitle">Per-user daily token budgets enforced by <code>IAIQuotaGate</code></p>
+      </div>
+    </div>
+    <div class="dev-badge" role="note">
+      <strong>Development only</strong>
+      <span>Users are simulated with the <code>X-User-Id</code> header from this machine. This is not authentication.</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel side" aria-labelledby="user-heading">
+      <h2 id="user-heading" class="visually-hidden">Demo user and usage</h2>
+
+      <div class="user-switch" role="radiogroup" aria-label="Demo user">
+        <button type="button" class="user-option" role="radio" data-user="alice" aria-checked="true">
+          <span class="avatar" aria-hidden="true">A</span> Alice
+        </button>
+        <button type="button" class="user-option" role="radio" data-user="bob" aria-checked="false">
+          <span class="avatar" aria-hidden="true">B</span> Bob
+        </button>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>Today's token budget</h3>
+          <span class="muted small" id="usage-day"></span>
+        </div>
+        <div class="meter" aria-hidden="true">
+          <div class="meter-charged" id="meter-charged"></div>
+          <div class="meter-reserved" id="meter-reserved"></div>
+        </div>
+        <p class="meter-caption"><span id="usage-percent">-</span> of the daily limit used</p>
+        <dl class="stats">
+          <div><dt>Daily limit</dt><dd id="stat-limit">-</dd></div>
+          <div><dt>Remaining</dt><dd id="stat-remaining">-</dd></div>
+          <div><dt>Input tokens</dt><dd id="stat-input">-</dd></div>
+          <div><dt>Output tokens</dt><dd id="stat-output">-</dd></div>
+          <div><dt>Total charged</dt><dd id="stat-charged">-</dd></div>
+          <div><dt>Reserved (in flight)</dt><dd id="stat-reserved">-</dd></div>
+        </dl>
+        <p class="muted small" id="usage-note"></p>
+        <div class="card-actions">
+          <button type="button" class="btn ghost" id="refresh-btn">Refresh</button>
+          <button type="button" class="btn danger-ghost" id="reset-btn">Reset today's usage</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>Recent AI calls</h3>
+          <span class="muted small">one row per provider call</span>
+        </div>
+        <div class="table-wrap">
+          <table class="calls">
+            <thead>
+              <tr><th>Time</th><th>Intent</th><th>Model</th><th class="num">In</th><th class="num">Out</th><th class="num">Charged</th><th>Result</th></tr>
+            </thead>
+            <tbody id="calls-body"></tbody>
+          </table>
+        </div>
+        <p class="muted small" id="calls-empty">No AI calls yet today.</p>
+      </div>
+    </section>
+
+    <section class="panel chat" aria-labelledby="chat-heading">
+      <div class="chat-head">
+        <div>
+          <h2 id="chat-heading">Ask Reveal AI</h2>
+          <p class="muted small">Datasource: <code>SampleExcel</code> (public sample workbook). Requests go to this server's Reveal AI endpoint, never directly to OpenAI.</p>
+        </div>
+        <button type="button" class="btn ghost" id="new-chat-btn">New conversation</button>
+      </div>
+
+      <div class="messages" id="messages" aria-live="polite">
+        <div class="empty-state" id="empty-state">
+          <p>Ask a question about the sample data, for example:</p>
+          <div class="suggestions">
+            <button type="button" class="chip">Which marketing campaign had the most clicks?</button>
+            <button type="button" class="chip">Summarize the healthcare data</button>
+            <button type="button" class="chip">Show manufacturing data by month</button>
+          </div>
+        </div>
+      </div>
+
+      <form class="composer" id="composer">
+        <label for="prompt" class="visually-hidden">Your question</label>
+        <textarea id="prompt" rows="2" maxlength="2000" placeholder="Ask a question about the sample data..." required></textarea>
+        <button type="submit" class="btn primary" id="send-btn">Send</button>
+      </form>
+      <p class="muted small composer-hint">One question can make several AI calls; each one is checked and charged separately.</p>
+    </section>
+  </main>
+</body>
+</html>

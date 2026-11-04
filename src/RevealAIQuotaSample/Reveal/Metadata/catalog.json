@@ -1,0 +1,8 @@
+{
+  "Datasources": [
+    {
+      "Id": "SampleExcel",
+      "Provider": "WebService"
+    }
+  ]
+}
