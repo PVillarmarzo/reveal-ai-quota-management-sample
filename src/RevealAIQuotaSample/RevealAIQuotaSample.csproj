@@ -9,9 +9,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Reveal.Sdk.AspNetCore" Version="2.2.1" />
-    <PackageReference Include="Reveal.Sdk.AI.AspNetCore" Version="1.5.213" />
-    <PackageReference Include="Reveal.Sdk.AI.OpenAI" Version="1.5.213" />
+    <PackageReference Include="Reveal.Sdk.AspNetCore" Version="2.3.0" />
+    <PackageReference Include="Reveal.Sdk.AI.AspNetCore" Version="1.6.358" />
+    <PackageReference Include="Reveal.Sdk.AI.OpenAI" Version="1.6.358" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.11" />
   </ItemGroup>
 

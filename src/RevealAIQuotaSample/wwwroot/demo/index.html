@@ -62,18 +62,19 @@
 
       <div class="card">
         <div class="card-head">
-          <h3>Recent AI calls</h3>
-          <span class="muted small">one row per provider call</span>
+          <h3>Usage per request</h3>
+          <span class="muted small">today, grouped by <code>OperationId</code></span>
         </div>
-        <div class="table-wrap">
-          <table class="calls">
-            <thead>
-              <tr><th>Time</th><th>Intent</th><th>Model</th><th class="num">In</th><th class="num">Out</th><th class="num">Charged</th><th>Result</th></tr>
-            </thead>
-            <tbody id="calls-body"></tbody>
-          </table>
-        </div>
-        <p class="muted small" id="calls-empty">No AI calls yet today.</p>
+        <dl class="stats">
+          <div><dt>Requests</dt><dd id="stat-requests">-</dd></div>
+          <div><dt>Provider calls</dt><dd id="stat-provider-calls">-</dd></div>
+          <div><dt>Avg tokens / request</dt><dd id="stat-avg-request">-</dd></div>
+          <div><dt>Avg tokens / call</dt><dd id="stat-avg-call">-</dd></div>
+        </dl>
+        <p class="muted small" id="requests-note"></p>
+        <div class="requests" id="requests-list"></div>
+        <p class="muted small" id="requests-empty">No AI requests yet today.</p>
+        <p class="muted small legend">Tokens are what the provider reported (input + output). Cached and reasoning tokens are already inside those counts. <em>Charged</em> is what the quota counted; reservations are estimates, not usage.</p>
       </div>
     </section>
 
@@ -90,7 +91,7 @@
         <div class="empty-state" id="empty-state">
           <p>Ask a question about the sample data, for example:</p>
           <div class="suggestions">
-            <button type="button" class="chip">Which marketing campaign had the most clicks?</button>
+            <button type="button" class="chip">Show total clicks by date</button>
             <button type="button" class="chip">Summarize the healthcare data</button>
             <button type="button" class="chip">Show manufacturing data by month</button>
           </div>
@@ -102,7 +103,7 @@
         <textarea id="prompt" rows="2" maxlength="2000" placeholder="Ask a question about the sample data..." required></textarea>
         <button type="submit" class="btn primary" id="send-btn">Send</button>
       </form>
-      <p class="muted small composer-hint">One question can make several AI calls; each one is checked and charged separately.</p>
+      <p class="muted small composer-hint">One question can make several AI calls (for example an intent classifier, then the generation steps); each one is checked and charged separately.</p>
     </section>
   </main>
 </body>

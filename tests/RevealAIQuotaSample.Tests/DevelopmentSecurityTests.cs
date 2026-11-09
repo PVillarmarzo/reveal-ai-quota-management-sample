@@ -164,11 +164,13 @@ public sealed class DevelopmentSecurityTests : IAsyncLifetime
         Assert.Equal(StatusCodes.Status400BadRequest, response.StatusCode);
     }
 
-    [Fact]
-    public async Task Quota_me_is_unauthorized_without_an_identity()
+    [Theory]
+    [InlineData("/quota/me")]
+    [InlineData("/quota/me/requests")]
+    public async Task Quota_me_is_unauthorized_without_an_identity(string path)
     {
         var server = await StartAsync(Environments.Production, enableDevEndpoints: false, useHeaderIdentity: false);
-        var response = await SendAsync(server, "GET", "/quota/me", "127.0.0.1", "localhost", userId: "alice");
+        var response = await SendAsync(server, "GET", path, "127.0.0.1", "localhost", userId: "alice");
         Assert.Equal(StatusCodes.Status401Unauthorized, response.StatusCode);
     }
 

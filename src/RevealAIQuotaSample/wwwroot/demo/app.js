@@ -10,6 +10,8 @@ const state = {
   user: "alice",
   busy: false,
   transcripts: { alice: [], bob: [] }, // in-memory, per user, for this page only
+  openRequests: new Set(),              // OperationIds the viewer expanded
+  seenRequests: new Set(),              // OperationIds already shown, so only a new one opens by itself
 };
 
 const $ = (id) => document.getElementById(id);
@@ -46,9 +48,9 @@ async function readJson(response) {
 async function refreshUsage() {
   const user = state.user;
   try {
-    const [meResponse, callsResponse] = await Promise.all([
+    const [meResponse, requestsResponse] = await Promise.all([
       fetch("/quota/me", { headers: headers(), cache: "no-store" }),
-      fetch(`/dev/quota/${encodeURIComponent(user)}/calls?limit=12`, { headers: headers(), cache: "no-store" }),
+      fetch("/quota/me/requests?limit=10", { headers: headers(), cache: "no-store" }),
     ]);
     if (user !== state.user) return; // the user switched while loading
     if (!meResponse.ok) {
@@ -58,7 +60,7 @@ async function refreshUsage() {
       return;
     }
     renderUsage(await meResponse.json());
-    renderCalls(callsResponse.ok ? await callsResponse.json() : []);
+    renderRequests(requestsResponse.ok ? await requestsResponse.json() : null);
   } catch {
     renderUsageError("Could not reach the server.");
   }
@@ -96,37 +98,147 @@ function renderUsage(u) {
 }
 
 function renderUsageError(message) {
-  for (const id of ["stat-limit", "stat-remaining", "stat-input", "stat-output", "stat-charged", "stat-reserved"]) {
+  for (const id of ["stat-limit", "stat-remaining", "stat-input", "stat-output", "stat-charged", "stat-reserved",
+    "stat-requests", "stat-provider-calls", "stat-avg-request", "stat-avg-call"]) {
     $(id).textContent = "-";
   }
   $("usage-percent").textContent = "-";
   $("usage-note").textContent = message;
-  renderCalls([]);
+  renderRequests(null);
 }
 
-function renderCalls(calls) {
-  const body = $("calls-body");
-  body.replaceChildren();
-  $("calls-empty").hidden = calls.length > 0;
-  for (const call of calls) {
-    const row = document.createElement("tr");
-    row.appendChild(el("td", null, timeFmt.format(new Date(call.createdUtc))));
-    row.appendChild(el("td", null, call.intent ?? "-"));
-    row.appendChild(el("td", null, call.model ?? "-"));
-    row.appendChild(el("td", "num", call.inputTokens === null ? "n/a" : fmt.format(call.inputTokens)));
-    row.appendChild(el("td", "num", call.outputTokens === null ? "n/a" : fmt.format(call.outputTokens)));
-    row.appendChild(el("td", "num", call.status === "reserved" ? `(${fmt.format(call.reservedTokens)})` : fmt.format(call.chargedTokens)));
-    const result = el("td");
-    result.appendChild(resultPill(call));
-    row.appendChild(result);
-    body.appendChild(row);
+// ---- Usage per request ---------------------------------------------------------------------
+
+const count = (v) => (v === null || v === undefined ? "n/a" : fmt.format(v));
+
+// Long identifiers (intents, nested stages, dated model ids) wrap after "-", ".", "/" or "_"
+// instead of at an arbitrary character. Text nodes plus <wbr>, so nothing is parsed as HTML.
+function breakable(tag, className, text) {
+  const node = el(tag, className);
+  String(text ?? "-").split(/(?<=[-./_])/).forEach((part, i) => {
+    if (i > 0) node.appendChild(document.createElement("wbr"));
+    node.appendChild(document.createTextNode(part));
+  });
+  return node;
+}
+const average = (v) => (v === null || v === undefined ? "-" : fmt.format(Math.round(v)));
+
+function renderRequests(report) {
+  const list = $("requests-list");
+  list.replaceChildren();
+  const requests = report ? report.recentRequests : [];
+  $("requests-empty").hidden = requests.length > 0;
+
+  $("stat-requests").textContent = report ? fmt.format(report.requests) : "-";
+  $("stat-provider-calls").textContent = report ? fmt.format(report.providerCalls) : "-";
+  $("stat-avg-request").textContent = report ? average(report.averageReportedTokensPerRequest) : "-";
+  $("stat-avg-call").textContent = report ? average(report.averageReportedTokensPerProviderCall) : "-";
+
+  const notes = [];
+  if (report && report.requests > 0) {
+    notes.push(`${fmt.format(report.reportedTotalTokens)} tokens reported, ${fmt.format(report.chargedTokens)} charged.`);
   }
+  if (report && report.callsWithMissingUsage > 0) {
+    notes.push(`${report.callsWithMissingUsage} call(s) reported no or partial usage, so the averages are a lower bound.`);
+  }
+  if (report && report.callsWithoutOperationId > 0) {
+    notes.push(`${report.callsWithoutOperationId} older call(s) have no OperationId and are not grouped.`);
+  }
+  $("requests-note").textContent = notes.join(" ");
+
+  requests.forEach((request, index) => {
+    const isNew = !state.seenRequests.has(request.operationId);
+    state.seenRequests.add(request.operationId);
+    if (isNew && index === 0) state.openRequests.add(request.operationId);
+    list.appendChild(requestItem(request));
+  });
+}
+
+function requestItem(request) {
+  const item = el("details", "request");
+  item.open = state.openRequests.has(request.operationId);
+  item.addEventListener("toggle", () => {
+    if (item.open) state.openRequests.add(request.operationId);
+    else state.openRequests.delete(request.operationId);
+  });
+
+  const summary = el("summary");
+  const line = el("span", "request-line");
+  line.appendChild(el("span", "request-time", timeFmt.format(new Date(request.startedUtc))));
+  line.appendChild(el("span", "request-total", `${fmt.format(request.reportedTotalTokens)} tokens`));
+  line.appendChild(el("span", "request-calls", `${request.providerCalls} provider call${request.providerCalls === 1 ? "" : "s"}`));
+  summary.appendChild(line);
+
+  const facts = [`${fmt.format(request.reportedInputTokens)} in + ${fmt.format(request.reportedOutputTokens)} out`,
+    `charged ${fmt.format(request.chargedTokens)}`];
+  if (request.cachedInputTokens) facts.push(`${fmt.format(request.cachedInputTokens)} cached`);
+  if (request.reasoningTokens) facts.push(`${fmt.format(request.reasoningTokens)} reasoning`);
+  if (request.pendingReservedTokens > 0) facts.push(`${fmt.format(request.pendingReservedTokens)} reserved (in flight)`);
+  if (request.deniedCalls > 0) facts.push(`${request.deniedCalls} denied`);
+  if (request.callsWithMissingUsage > 0) facts.push(`${request.callsWithMissingUsage} usage missing`);
+  if (request.auxiliaryOperationIds.length > 0) facts.push(`${request.auxiliaryOperationIds.length} auxiliary operation(s)`);
+  summary.appendChild(el("span", "request-facts", facts.join(" · ")));
+  item.appendChild(summary);
+
+  const wrap = el("div", "table-wrap");
+  const table = el("table", "calls");
+  const head = el("thead");
+  const headRow = el("tr");
+  for (const [text, cls] of [["Call", null], ["Model", null], ["In", "num"], ["Out", "num"], ["Charged", "num"], ["Result", null]]) {
+    headRow.appendChild(el("th", cls, text));
+  }
+  head.appendChild(headRow);
+  table.appendChild(head);
+  const body = el("tbody");
+  for (const call of request.calls) body.appendChild(callRow(call, request.operationId));
+  table.appendChild(body);
+  wrap.appendChild(table);
+  item.appendChild(wrap);
+  item.appendChild(el("div", "muted small op-id", `OperationId ${request.operationId}`));
+  return item;
+}
+
+function callRow(call, requestOperationId) {
+  const row = el("tr");
+
+  const what = el("td");
+  what.appendChild(breakable("div", null, call.intent));
+  const detail = [];
+  if (call.stage) detail.push(call.stage);
+  if (call.attempt !== null && call.attempt !== undefined) detail.push(`attempt ${call.attempt}`);
+  if (call.operationId !== requestOperationId) detail.push("auxiliary operation");
+  if (call.isSystemCall) detail.push("system");
+  if (detail.length) what.appendChild(breakable("div", "sub", detail.join(" · ")));
+  what.appendChild(breakable("div", "sub model-inline", call.model)); // shown instead of the Model column on phones
+  row.appendChild(what);
+
+  row.appendChild(breakable("td", null, call.model));
+
+  const input = el("td", "num", call.reachedProvider ? count(call.inputTokens) : "-");
+  if (call.cachedInputTokens) input.appendChild(el("div", "sub", `${fmt.format(call.cachedInputTokens)} cached`));
+  row.appendChild(input);
+
+  const output = el("td", "num", call.reachedProvider ? count(call.outputTokens) : "-");
+  if (call.reasoningTokens) output.appendChild(el("div", "sub", `${fmt.format(call.reasoningTokens)} reasoning`));
+  row.appendChild(output);
+
+  let charged = "-";
+  if (call.status === "reserved") charged = `(${fmt.format(call.reservedTokens)})`;
+  else if (call.chargedTokens !== null && call.chargedTokens !== undefined) charged = fmt.format(call.chargedTokens);
+  row.appendChild(el("td", "num", charged));
+
+  const result = el("td");
+  result.appendChild(resultPill(call));
+  row.appendChild(result);
+  return row;
 }
 
 function resultPill(call) {
   if (call.status === "reserved") return el("span", "pill warn", "in flight");
+  if (call.status === "denied") return el("span", "pill bad", "denied");
   if (call.succeeded === false) return el("span", "pill bad", call.errorCode || "failed");
   if (call.usageMissing) return el("span", "pill warn", "usage missing");
+  if (call.status === "not-gated") return el("span", "pill neutral", "not gated");
   return el("span", "pill ok", "ok");
 }
 
@@ -194,7 +306,7 @@ function usageMeta(usage) {
   const input = usage.inputTokens ?? null;
   const output = usage.outputTokens ?? null;
   const part = (v) => (v === null ? "n/a" : fmt.format(v));
-  return `This request: ${part(input)} input + ${part(output)} output tokens, as reported by Reveal AI.`;
+  return `This request: ${part(input)} input + ${part(output)} output tokens across its provider calls, as reported by Reveal AI.`;
 }
 
 async function sendMessage(text) {

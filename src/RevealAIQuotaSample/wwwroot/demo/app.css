@@ -161,14 +161,37 @@ h3 { font-size: 0.95rem; }
 .calls th, .calls td { padding: 6px 4px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .calls th { color: var(--muted); font-weight: 600; }
 .calls .num { text-align: right; }
-/* Time, intent and model can be long (e.g. dated model ids): let them wrap so the number and
-   result columns stay visible without horizontal scrolling. */
-.calls td:nth-child(1) { white-space: normal; }
-.calls td:nth-child(2), .calls td:nth-child(3) { white-space: normal; overflow-wrap: anywhere; min-width: 4.5em; }
+/* The call (intent, stage) and the model can be long (e.g. dated model ids, nested stage names):
+   let them wrap so the number and result columns stay visible without horizontal scrolling. */
+.calls td:nth-child(1), .calls td:nth-child(2) { white-space: normal; overflow-wrap: break-word; min-width: 4.5em; }
+.calls .sub { color: var(--muted); font-size: 0.68rem; white-space: normal; }
+.calls .model-inline { display: none; }
 .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
 .pill.ok { background: var(--ok-soft); color: var(--ok); }
 .pill.warn { background: var(--warn-soft); color: var(--warn); }
 .pill.bad { background: var(--danger-soft); color: var(--danger); }
+.pill.neutral { background: var(--accent-soft); color: var(--accent); }
+
+/* Usage per request */
+.stats + .muted { margin-top: 10px; }
+.requests { display: flex; flex-direction: column; gap: 8px; max-height: 460px; overflow-y: auto; margin-top: 10px; }
+.request { border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+.request > summary {
+  cursor: pointer; list-style: none; padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.request > summary::-webkit-details-marker { display: none; }
+.request > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
+.request-line { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.request-line::before { content: "\25B8"; color: var(--muted); font-size: 0.8rem; }
+.request[open] .request-line::before { content: "\25BE"; }
+.request-time { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.request-total { font-weight: 650; font-variant-numeric: tabular-nums; }
+.request-calls { font-size: 0.82rem; }
+.request-facts { color: var(--muted); font-size: 0.74rem; overflow-wrap: anywhere; }
+.request .table-wrap { padding: 0 8px; background: var(--panel); border-top: 1px solid var(--border); }
+.request .op-id { padding: 6px 10px 8px; overflow-wrap: anywhere; font-size: 0.68rem; }
+.legend { margin: 10px 0 0; }
 
 /* Chat */
 .chat { padding: 18px; min-height: 560px; }
@@ -222,6 +245,10 @@ h3 { font-size: 0.95rem; }
   .stats { grid-template-columns: 1fr; }
   .calls { font-size: 0.72rem; }
   .calls th, .calls td { padding: 5px 3px; }
+  /* Phones: the model moves under the call name so the number columns fit. */
+  .calls th:nth-child(2), .calls td:nth-child(2) { display: none; }
+  .calls .model-inline { display: block; }
+  .request .table-wrap { padding: 0 4px; }
   .msg { max-width: 100%; }
   .chat-head { flex-direction: column; }
 }

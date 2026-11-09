@@ -12,7 +12,9 @@ namespace RevealAIQuotaSample.Quota;
 /// </para>
 /// <para>
 /// <see cref="SettleAsync"/> runs after the call, keyed by the same CallId, and replaces the
-/// reservation with the tokens the provider reported. It is idempotent.
+/// reservation with the tokens the provider reported. It is idempotent. It also stores the SDK 1.6
+/// usage details of the call (OperationId, ParentOperationId, Stage, Attempt, reasoning and cached
+/// input tokens) for reporting; they never change the charge.
 /// </para>
 /// Registered as a singleton by AddQuotaGate, so it must be thread-safe (the store is).
 /// </summary>
@@ -57,7 +59,7 @@ public sealed class DailyTokenQuotaGate : IAIQuotaGate
 
         var result = await _store.TryReserveAsync(
             context.CallId, userId, day, reservation, options.DailyTokenLimit,
-            new CallInfo(context.Intent, context.Profile, context.Model), cancellationToken);
+            Describe(context, context.Model), cancellationToken);
 
         if (result.Allowed)
         {
@@ -86,8 +88,8 @@ public sealed class DailyTokenQuotaGate : IAIQuotaGate
         var result = await _store.SettleAsync(
             context.CallId, userId, DateOnly.FromDateTime(actual.Timestamp.UtcDateTime),
             inputTokens, outputTokens, actual.Succeeded, actual.ErrorCode,
-            options.MissingUsagePolicy, new CallInfo(context.Intent, context.Profile, actual.Model ?? context.Model),
-            cancellationToken);
+            options.MissingUsagePolicy, Describe(context, actual.Model ?? context.Model),
+            UsageBreakdown.From(actual), cancellationToken);
 
         if (result.UsageMissing && !result.AlreadySettled)
         {
@@ -97,6 +99,11 @@ public sealed class DailyTokenQuotaGate : IAIQuotaGate
                 actual.Succeeded, actual.ErrorCode, result.ChargedTokens, options.MissingUsagePolicy);
         }
     }
+
+    /// <summary>The descriptive fields stored with the call. OperationId groups every provider call
+    /// of one user request (one chat turn), so the ledger can report usage per request.</summary>
+    private static CallInfo Describe(AICallContext context, string? model)
+        => new(context.Intent, context.Profile, model, context.OperationId, context.Provider, context.IsSystemCall);
 
     /// <summary>Applies <see cref="QuotaOptions.TreatZeroTokenCountsAsMissing"/>.</summary>
     private static int? Normalize(int? tokens, QuotaOptions options)

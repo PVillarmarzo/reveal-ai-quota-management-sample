@@ -28,6 +28,23 @@ public static class QuotaEndpoints
             return Results.Ok(ToSummary(usage, options.CurrentValue, time));
         });
 
+        // Today's usage per user request (one top-level OperationId), with each request's provider
+        // calls, plus the averages per request and per provider call.
+        app.MapGet("/quota/me/requests", async (
+            HttpContext http, IRVUserContextProvider users, QuotaStore store, TimeProvider time,
+            CancellationToken ct, int? limit) =>
+        {
+            var userId = users.GetUserContext(http).UserId;
+            if (string.IsNullOrEmpty(userId) || userId == DailyTokenQuotaGate.AnonymousUserId)
+            {
+                return Results.Problem("No user identity for this request.", statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            var day = Today(time);
+            var (ledger, records) = await store.GetReportRowsAsync(userId, day, ct);
+            return Results.Ok(UsageReport.Build(userId, QuotaStore.FormatDay(day), ledger, records, Math.Clamp(limit ?? 10, 1, 50)));
+        });
+
         if (!DevelopmentEndpointsEnabled(app))
         {
             return;
